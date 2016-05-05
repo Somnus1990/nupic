@@ -1515,11 +1515,11 @@ class TP(ConsolePrinterMixin):
     # How much input history have we accumulated?
     # The current input is always at the end of self._prevInfPatterns (at
     # index -1), but it is also evaluated as a potential starting point by
-    # turning on it's start cells and seeing if it generates sufficient
+    # turning on its start cells and seeing if it generates sufficient
     # predictions going forward.
     numPrevPatterns = len(self._prevInfPatterns)
-    if numPrevPatterns <= 0:
-      return
+    # if numPrevPatterns <= 0:
+    #   return
 
     # This is an easy to use label for the current time step
     currentTimeStepsOffset = numPrevPatterns - 1
@@ -2084,6 +2084,8 @@ class TP(ConsolePrinterMixin):
         segUpdate = self.getSegmentActiveSynapses(
             c, i, s, self.lrnActiveState['t-1'], newSynapses = True)
         s.totalActivations += 1
+        if hasattr(self, 'onCorrectMatchingSegment'):
+          self.onCorrectMatchingSegment(s)
         # This will update the permanences, posActivationsCount, and the
         # lastActiveIteration (age).
         trimSegment = self.adaptSegment(segUpdate)
@@ -2159,6 +2161,8 @@ class TP(ConsolePrinterMixin):
           newSynapses=(numActive < self.newSynapseCount))
 
       s.totalActivations += 1    # increment totalActivations
+      if hasattr(self, 'onActiveSegment'):
+        self.onActiveSegment(s)
       self.addToSegmentUpdates(c, i, segUpdate)
 
       if self.doPooling:
@@ -2378,6 +2382,8 @@ class TP(ConsolePrinterMixin):
           for seg in segsToDel: # remove some segments of this cell
             self.cleanUpdatesList(c, i, seg)
             self.cells[c][i].remove(seg)
+            if hasattr(self, 'onDestroySegment'):
+              self.onDestroySegment(seg)
 
     # Update the prediction score stats
     # Learning always includes inference
@@ -2509,6 +2515,8 @@ class TP(ConsolePrinterMixin):
     for seg in segsToDel: # remove some segments of this cell
       self.cleanUpdatesList(colIdx, cellIdx, seg)
       self.cells[colIdx][cellIdx].remove(seg)
+      if hasattr(self, 'onDestroySegment'):
+        self.onDestroySegment(seg)
       nSynsRemoved += len(seg.syns)
 
     return nSegsRemoved, nSynsRemoved
@@ -2896,6 +2904,8 @@ class TP(ConsolePrinterMixin):
       candidateSegment.debugPrint()
     self.cleanUpdatesList(colIdx, candidateCellIdx, candidateSegment)
     self.cells[colIdx][candidateCellIdx].remove(candidateSegment)
+    if hasattr(self, 'onDestroySegment'):
+      self.onDestroySegment(candidateSegment)
     return candidateCellIdx
 
 
@@ -3153,6 +3163,8 @@ class TP(ConsolePrinterMixin):
         newSegment.debugPrint()
 
       self.cells[c][i].append(newSegment)
+      if hasattr(self, 'onCreateSegment'):
+        self.onCreateSegment(c, i, newSegment)
 
     return trimSegment
 
