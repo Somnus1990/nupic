@@ -278,10 +278,10 @@ class TemporalMemory(object):
     )
 
     maxSegmentsPerCell = self.connections.maxSegmentsPerCell
-    segmentKey = lambda segment: (segment.cell * maxSegmentsPerCell
-                                  + segment.idx)
-    self.activeSegments = sorted(activeSegments, key = segmentKey)
-    self.matchingSegments = sorted(matchingSegments, key = segmentKey)
+    self.activeSegments = sorted(activeSegments,
+                                 key=self.connections.segmentSortKey)
+    self.matchingSegments = sorted(matchingSegments,
+                                   key=self.connections.segmentSortKey)
     self.numActiveConnectedSynapsesForSegment = numActiveConnected
     self.numActivePotentialSynapsesForSegment = numActivePotential
 
@@ -599,6 +599,7 @@ class TemporalMemory(object):
     @param permanenceDecrement  (float)  Amount to decrement inactive synapses
     """
 
+    # Destroying a synapse modifies the set that we're iterating through.
     synapsesToDestroy = []
 
     for synapse in connections.synapsesForSegment(segment):
@@ -882,7 +883,8 @@ class TemporalMemory(object):
         proto.init('activeSegmentOverlaps', len(self.activeSegments))
     for i, segment in enumerate(self.activeSegments):
       activeSegmentOverlaps[i].cell = segment.cell
-      activeSegmentOverlaps[i].segment = segment.idx
+      idx = self.connections.segmentsForCell(segment.cell).index(segment)
+      activeSegmentOverlaps[i].segment = idx
       activeSegmentOverlaps[i].overlap = (
         self.numActiveConnectedSynapsesForSegment[segment.flatIdx]
       )
@@ -891,7 +893,8 @@ class TemporalMemory(object):
         proto.init('matchingSegmentOverlaps', len(self.matchingSegments))
     for i, segment in enumerate(self.matchingSegments):
       matchingSegmentOverlaps[i].cell = segment.cell
-      matchingSegmentOverlaps[i].segment = segment.idx
+      idx = self.connections.segmentsForCell(segment.cell).index(segment)
+      matchingSegmentOverlaps[i].segment = idx
       matchingSegmentOverlaps[i].overlap = (
         self.numActivePotentialSynapsesForSegment[segment.flatIdx]
       )

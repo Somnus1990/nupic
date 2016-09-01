@@ -59,14 +59,26 @@ class ConnectionsTest(unittest.TestCase):
     connections.startNewIteration();
     connections.startNewIteration();
 
+    # Create a segment with 1 synapse.
     segment2 = connections.createSegment(42)
     connections.startNewIteration();
 
+    # Give the first segment some activity.
     connections.recordSegmentActivity(segment1)
 
-    segment3 = connections.createSegment(42);
+    # Create a new segment with no synapses.
+    connections.createSegment(42);
 
-    self.assertEqual(segment2.idx, segment3.idx)
+    segments = connections.segmentsForCell(42)
+    self.assertEqual(2, len(segments))
+
+    # Verify first segment is still there with the same synapses.
+    presynapticCells = set(synapse.presynapticCell for synapse in
+                           connections.synapsesForSegment(segments[0]))
+    self.assertEqual(set([1, 2]), presynapticCells)
+
+    # Verify second segment has been replaced.
+    self.assertEqual(0, connections.numSynapses(segments[1]))
 
 
   def testSynapseReuse(self):
@@ -251,7 +263,7 @@ class ConnectionsTest(unittest.TestCase):
     connections.createSegment(11)
     self.assertEqual(2, connections.numSegments())
     segment3 = connections.createSegment(11)
-    self.assertLess(segment3.idx, 2)
+    self.assertEqual(2, connections.numSegments(11))
     self.assertEqual(2, connections.numSegments())
 
 

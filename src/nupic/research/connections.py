@@ -30,19 +30,26 @@ EPSILON = 0.00001 # constant error threshold to check equality of permanences to
 class Segment(object):
   """ Class containing minimal information to identify a unique segment """
 
-  __slots__ = ["cell", "idx", "flatIdx", "_synapses", "_lastUsedIteration"]
+  __slots__ = ["cell", "flatIdx", "_synapses", "_lastUsedIteration", "_ordinal"]
 
-  def __init__(self, cell, idx, flatIdx):
+  def __init__(self, cell, flatIdx, lastUsedIteration, ordinal):
     """
-    @param cell (int) Index of the cell that this segment is on.
-    @param idx (int) Index of the segment on the cell.
-    @param flatIdx (int) The segment's flattened list index.
+    @param cell (int)
+    Index of the cell that this segment is on.
+
+    @param flatIdx (int)
+    The segment's flattened list index.
+
+    @param ordinal (long)
+    Used to sort segments. The sort order needs to be consistent between
+    implementations so that tie-breaking is consistent when finding the best
+    matching segment.
     """
     self.cell = cell
-    self.idx = idx
     self.flatIdx = flatIdx
     self._synapses = set()
-    self._lastUsedIteration = -1
+    self._lastUsedIteration = lastUsedIteration
+    self._ordinal = ordinal
 
 
   def __eq__(self, other):
@@ -52,10 +59,10 @@ class Segment(object):
 
     """
 
-    return ((self.idx, self.cell, self._lastUsedIteration) ==
-            (other.idx, other.cell, other._lastUsedIteration) and
-            sorted(self._synapses, key=lambda x: x.ordinal) ==
-            sorted(other._synapses, key=lambda x: x.ordinal))
+    return ((self.cell, self._lastUsedIteration) ==
+            (other.cell, other._lastUsedIteration) and
+            sorted(self._synapses, key=lambda x: x._ordinal) ==
+            sorted(other._synapses, key=lambda x: x._ordinal))
 
 
   def __ne__(self, other):
@@ -66,7 +73,7 @@ class Segment(object):
 class Synapse(object):
   """ Class containing minimal information to identify a unique synapse """
 
-  __slots__ = ["segment", "idx", "presynapticCell", "permanence", "ordinal"]
+  __slots__ = ["segment", "presynapticCell", "permanence", "_ordinal"]
 
   def __init__(self, segment, presynapticCell, permanence, ordinal):
     """
@@ -87,7 +94,7 @@ class Synapse(object):
     self.segment = segment
     self.presynapticCell = presynapticCell
     self.permanence = permanence
-    self.ordinal = ordinal
+    self._ordinal = ordinal
 
 
   def __eq__(self, other):
@@ -95,8 +102,8 @@ class Synapse(object):
     differences for synapse permanence.
 
     """
-    return ((self.segment.cell, self.segment.idx, self.presynapticCell) ==
-            (other.segment.cell, other.segment.idx, other.presynapticCell) and
+    return ((self.segment.cell, self.presynapticCell) ==
+            (other.segment.cell, other.presynapticCell) and
             abs(self.permanence - other.permanence) < EPSILON)
 
 
@@ -156,7 +163,11 @@ class Connections(object):
     self._freeFlatIdxs = []
     self._nextFlatIdx = 0
     self._iteration = 0
-    self._nextSynapseOrdinal = long(0);
+
+    # Whenever creating a new Synapse or Segment, give it a unique ordinal.
+    # These can be used to sort synapses or segments by age.
+    self._nextSynapseOrdinal = long(0)
+    self._nextSegmentOrdinal = long(0)
 
 
   def segmentsForCell(self, cell):
@@ -240,7 +251,7 @@ class Connections(object):
     minPermanence = float("inf")
 
     for synapse in sorted(self.synapsesForSegment(segment),
-                          key=lambda s: s.ordinal):
+                          key=lambda s: s._ordinal):
       if synapse.permanence < minPermanence - EPSILON:
         minSynapse = synapse
         minPermanence = synapse.permanence
@@ -287,6 +298,7 @@ class Connections(object):
     @return (int) New segment index
     """
     while self.numSegments(cell) >= self.maxSegmentsPerCell:
+      # As a tie-breaker, use the oldest segment (i.e. the first).
       leastRecentlyUsed = min(self.segmentsForCell(cell),
                               key=lambda s: s._lastUsedIteration)
       self.destroySegment(leastRecentlyUsed)
@@ -301,11 +313,12 @@ class Connections(object):
       flatIdx = self._nextFlatIdx
       self._nextFlatIdx += 1
 
-    segment = Segment(cell, idx, flatIdx)
+    ordinal = self._nextSegmentOrdinal
+    self._nextSegmentOrdinal += 1
+
+    segment = Segment(cell, flatIdx,  self._iteration, ordinal)
     cellData._segments.append(segment)
     self._segmentForFlatIdx.append(segment)
-
-    segment._lastUsedIteration = self._iteration
 
     return segment
 
@@ -323,12 +336,8 @@ class Connections(object):
 
     # Remove the segment from the cell's list.
     segments = self._cells[segment.cell]._segments
-    assert segments[segment.idx] is segment
-    del segments[segment.idx]
-
-    # Shift the subsequent indices.
-    for segmentIdx in xrange(segment.idx, len(segments)):
-      segments[segmentIdx].idx = segmentIdx
+    i = segments.index(segment)
+    del segments[i]
 
     # Free the flatIdx and remove the final reference so the Segment can be
     # garbage-collected.
@@ -468,6 +477,10 @@ class Connections(object):
     return self._numSynapses
 
 
+  def segmentSortKey(self, segment):
+    return segment.cell + (segment._ordinal / float(self._nextSegmentOrdinal))
+
+
   def write(self, proto):
     """ Writes serialized data to proto object
 
@@ -485,7 +498,7 @@ class Connections(object):
         protoSegments[j].destroyed = False
         protoSegments[j].lastUsedIteration = segment._lastUsedIteration
 
-        for k, synapse in enumerate(sorted(synapses, key=lambda s: s.ordinal)):
+        for k, synapse in enumerate(sorted(synapses, key=lambda s: s._ordinal)):
           protoSynapses[k].presynapticCell = synapse.presynapticCell
           protoSynapses[k].permanence = synapse.permanence
           protoSynapses[k].destroyed = False
@@ -519,12 +532,14 @@ class Connections(object):
         if protoSegment.destroyed:
           continue
 
-        segment = Segment(cellIdx, segmentIdx, connections._nextFlatIdx)
-        segment._lastUsedIteration = protoSegment.lastUsedIteration
+        segment = Segment(cellIdx, connections._nextFlatIdx,
+                          protoSegment.lastUsedIteration,
+                          connections._nextSegmentOrdinal)
 
         segments.append(segment)
         connections._segmentForFlatIdx.append(segment)
         connections._nextFlatIdx += 1
+        connections._nextSegmentOrdinal += 1
 
         synapses = segment._synapses
         protoSynapses = protoSegment.synapses
