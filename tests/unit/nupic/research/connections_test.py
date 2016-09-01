@@ -38,11 +38,9 @@ class ConnectionsTest(unittest.TestCase):
     connections = Connections(1024)
 
     segment1 = connections.createSegment(10)
-    self.assertEqual(segment1.idx, 0)
     self.assertEqual(segment1.cell, 10)
 
     segment2 = connections.createSegment(10)
-    self.assertEqual(segment2.idx, 1)
     self.assertEqual(segment2.cell, 10)
 
     self.assertEqual([segment1, segment2],
@@ -80,19 +78,20 @@ class ConnectionsTest(unittest.TestCase):
     segment = connections.createSegment(10)
 
     synapse1 = connections.createSynapse(segment, 50, .34)
-    synapse2 = connections.createSynapse(segment, 51, .34)
+    synapse2 = connections.createSynapse(segment, 51, .48)
 
-    synapses = list(connections.synapsesForSegment(segment))
-    self.assertEqual(synapses, [synapse1, synapse2])
+    synapses = connections.synapsesForSegment(segment)
+    self.assertEqual(set([synapse1, synapse2]), synapses)
 
-    #Add an additional synapse to force it over the limit of num synapses
-    #per segment.
-    synapse3 = connections.createSynapse(segment, 52, .52)
-    self.assertEqual(0, synapse3.idx)
+    # Add an additional synapse to force it over the limit of num synapses
+    # per segment.
+    connections.createSynapse(segment, 52, .52)
 
-    #ensure lower permanence synapse was removed
-    synapses = list(connections.synapsesForSegment(segment))
-    self.assertEqual(synapses, [synapse3, synapse2])
+    # Ensure lower permanence synapse was removed.
+    self.assertEqual(set([51, 52]),
+                     set(synapse.presynapticCell
+                         for synapse in
+                         connections.synapsesForSegment(segment)))
 
 
   def testDestroySegment(self):
@@ -118,9 +117,6 @@ class ConnectionsTest(unittest.TestCase):
     self.assertEqual(3, connections.numSegments())
     self.assertEqual(0, connections.numSynapses())
 
-    args = [segment2]
-    self.assertRaises(ValueError, connections.synapsesForSegment, *args)
-
     (numActiveConnected,
      numActivePotential) = connections.computeActivity([80, 81, 82], 0.5)
 
@@ -144,8 +140,8 @@ class ConnectionsTest(unittest.TestCase):
     connections.destroySynapse(synapse2)
 
     self.assertEqual(2, connections.numSynapses())
-    self.assertEqual([synapse1, synapse3],
-                     list(connections.synapsesForSegment(segment)))
+    self.assertEqual(set([synapse1, synapse3]),
+                     connections.synapsesForSegment(segment))
     (numActiveConnected,
      numActivePotential) = connections.computeActivity([80, 81, 82], .5)
 
@@ -178,11 +174,11 @@ class ConnectionsTest(unittest.TestCase):
     self.assertEqual(203, synapse3.presynapticCell)
 
     connections.destroySegment(segment1)
-    self.assertEqual([synapse2, synapse3, synapse4],
-                     list(connections.synapsesForSegment(segment3)))
+    self.assertEqual(set([synapse2, synapse3, synapse4]),
+                     connections.synapsesForSegment(segment3))
     connections.destroySegment(segment5)
-    self.assertEqual([synapse2, synapse3, synapse4],
-                     list(connections.synapsesForSegment(segment3)))
+    self.assertEqual(set([synapse2, synapse3, synapse4]),
+                     connections.synapsesForSegment(segment3))
     self.assertEqual(203, synapse3.presynapticCell)
 
 
@@ -233,7 +229,7 @@ class ConnectionsTest(unittest.TestCase):
     reincarnated = connections.createSegment(11)
 
     self.assertEqual(0, connections.numSynapses(reincarnated))
-    self.assertEqual(0, len(list(connections.synapsesForSegment(reincarnated))))
+    self.assertEqual(0, len(connections.synapsesForSegment(reincarnated)))
 
 
   def testDestroySegmentsThenReachLimit(self):
@@ -280,7 +276,6 @@ class ConnectionsTest(unittest.TestCase):
     connections.createSynapse(segment, 202, .90)
     self.assertEqual(2, connections.numSynapses())
     synapse3 = connections.createSynapse(segment, 203, .8)
-    self.assertLess(synapse3.idx, 2)
     self.assertEqual(2, connections.numSynapses())
 
 
@@ -298,7 +293,6 @@ class ConnectionsTest(unittest.TestCase):
     connections.createSynapse(segment, 203, .8)
     self.assertEqual(2, connections.numSynapses())
     synapse = connections.createSynapse(segment, 204, .8)
-    self.assertLess(synapse.idx, 2)
     self.assertEqual(2, connections.numSynapses())
 
 

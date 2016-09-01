@@ -599,6 +599,8 @@ class TemporalMemory(object):
     @param permanenceDecrement  (float)  Amount to decrement inactive synapses
     """
 
+    synapsesToDestroy = []
+
     for synapse in connections.synapsesForSegment(segment):
       permanence = synapse.permanence
 
@@ -611,9 +613,12 @@ class TemporalMemory(object):
       permanence = max(0.0, min(1.0, permanence))
 
       if permanence < EPSILON:
-        connections.destroySynapse(synapse)
+        synapsesToDestroy.append(synapse)
       else:
         connections.updateSynapsePermanence(synapse, permanence)
+
+    for synapse in synapsesToDestroy:
+      connections.destroySynapse(synapse)
 
     if connections.numSynapses(segment) == 0:
       connections.destroySegment(segment)
