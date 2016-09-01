@@ -559,32 +559,21 @@ class TemporalMemory(object):
     @params prevWinnerCells    (list)   Winner cells in `t-1`
     @param  initialPermanence  (float)  Initial permanence of a new synapse.
 
-    Notes: The process of writing the last value into the index in the array
-    that was most recently changed is to ensure the same results that we get
-    in the c++ implentation using iter_swap with vectors.
     """
     candidates = list(prevWinnerCells)
-    eligibleEnd = len(candidates) - 1
 
-    for synapse in sorted(connections.synapsesForSegment(segment),
-                          key=connections.synapseAgeSortKey):
-      try:
-        index = candidates[:eligibleEnd + 1].index(synapse.presynapticCell)
-      except ValueError:
-        index = -1
-      if index != -1:
-        candidates[index] = candidates[eligibleEnd]
-        eligibleEnd -= 1
+    for synapse in connections.synapsesForSegment(segment):
+      i = binSearch(candidates, synapse.presynapticCell)
+      if i != -1:
+        del candidates[i]
 
-    candidatesLength = eligibleEnd + 1
-    nActual = min(nDesiredNewSynapes, candidatesLength)
+    nActual = min(nDesiredNewSynapes, len(candidates))
 
     for _ in range(nActual):
-      rand = random.getUInt32(candidatesLength)
-      connections.createSynapse(segment, candidates[rand],
-                                initialPermanence)
-      candidates[rand] = candidates[candidatesLength - 1]
-      candidatesLength -= 1
+      assert candidates == sorted(candidates)
+      i = random.getUInt32(len(candidates))
+      connections.createSynapse(segment, candidates[i], initialPermanence)
+      del candidates[i]
 
 
   @staticmethod

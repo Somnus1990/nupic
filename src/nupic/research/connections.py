@@ -511,19 +511,6 @@ class Connections(object):
     return segment.cell + (segment._ordinal / float(self._nextSegmentOrdinal))
 
 
-  def synapseAgeSortKey(self, synapse):
-    """ Return a numeric key for sorting synapses by age.
-
-    A lower key indicated an older synapse. This can be used with `sorted`.
-
-    @param synapse
-    A Synapse within this Connections.
-
-    @retval (long) A numeric key for sorting.
-    """
-    return synapse._ordinal
-
-
   def write(self, proto):
     """ Writes serialized data to proto object
 
