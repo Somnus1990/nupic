@@ -234,6 +234,30 @@ class Connections(object):
     return self._cells[cell]._segments[idx]
 
 
+  def _leastRecentlyUsedSegment(self, cell):
+    """ Find this cell's segment that was least recently used.
+
+    Implement this explicitly to make sure that tie-breaking is consistent.
+    When there's a tie, choose the oldest segment.
+
+    @param cell (int) Cell to query.
+
+    @return (Object) Least recently used segment.
+
+    """
+    minSegment = None
+    minIteration = float("inf")
+
+    for segment in self.segmentsForCell(cell):
+      if segment._lastUsedIteration < minIteration:
+        minSegment = segment
+        minIteration = segment._lastUsedIteration
+
+    assert minSegment is not None
+
+    return minSegment
+
+
   def _minPermanenceSynapse(self, segment):
     """ Find this segment's synapse with the smallest permanence.
 
@@ -298,10 +322,7 @@ class Connections(object):
     @return (int) New segment index
     """
     while self.numSegments(cell) >= self.maxSegmentsPerCell:
-      # As a tie-breaker, use the oldest segment (i.e. the first).
-      leastRecentlyUsed = min(self.segmentsForCell(cell),
-                              key=lambda s: s._lastUsedIteration)
-      self.destroySegment(leastRecentlyUsed)
+      self.destroySegment(self._leastRecentlyUsedSegment(cell))
 
     cellData = self._cells[cell]
 
@@ -477,8 +498,30 @@ class Connections(object):
     return self._numSynapses
 
 
-  def segmentSortKey(self, segment):
+  def segmentPositionSortKey(self, segment):
+    """ Return a numeric key for sorting this segment.
+
+    This can be used with `sorted`.
+
+    @param segment
+    A Segment within this Connections.
+
+    @retval (float) A numeric key for sorting.
+    """
     return segment.cell + (segment._ordinal / float(self._nextSegmentOrdinal))
+
+
+  def synapseAgeSortKey(self, synapse):
+    """ Return a numeric key for sorting synapses by age.
+
+    A lower key indicated an older synapse. This can be used with `sorted`.
+
+    @param synapse
+    A Synapse within this Connections.
+
+    @retval (long) A numeric key for sorting.
+    """
+    return synapse._ordinal
 
 
   def write(self, proto):
@@ -550,13 +593,13 @@ class Connections(object):
 
           presynapticCell = protoSynapse.presynapticCell
           synapse = Synapse(segment, presynapticCell, protoSynapse.permanence,
-                            ordinal=connections._numSynapses)
+                            ordinal=connections._nextSynapseOrdinal)
+          connections._nextSynapseOrdinal += 1
           synapses.add(synapse)
           connections._synapsesForPresynapticCell[presynapticCell].add(synapse)
 
           connections._numSynapses += 1
 
-    connections._nextSynapseOrdinal = connections._numSynapses
     connections._iteration = proto.iteration
     #pylint: enable=W0212
     return connections

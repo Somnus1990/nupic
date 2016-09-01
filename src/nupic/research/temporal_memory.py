@@ -279,9 +279,9 @@ class TemporalMemory(object):
 
     maxSegmentsPerCell = self.connections.maxSegmentsPerCell
     self.activeSegments = sorted(activeSegments,
-                                 key=self.connections.segmentSortKey)
+                                 key=self.connections.segmentPositionSortKey)
     self.matchingSegments = sorted(matchingSegments,
-                                   key=self.connections.segmentSortKey)
+                                   key=self.connections.segmentPositionSortKey)
     self.numActiveConnectedSynapsesForSegment = numActiveConnected
     self.numActivePotentialSynapsesForSegment = numActivePotential
 
@@ -566,7 +566,8 @@ class TemporalMemory(object):
     candidates = list(prevWinnerCells)
     eligibleEnd = len(candidates) - 1
 
-    for synapse in connections.synapsesForSegment(segment):
+    for synapse in sorted(connections.synapsesForSegment(segment),
+                          key=connections.synapseAgeSortKey):
       try:
         index = candidates[:eligibleEnd + 1].index(synapse.presynapticCell)
       except ValueError:
@@ -898,7 +899,6 @@ class TemporalMemory(object):
       matchingSegmentOverlaps[i].overlap = (
         self.numActivePotentialSynapsesForSegment[segment.flatIdx]
       )
-
 
 
   @classmethod
